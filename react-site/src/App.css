@@ -1,0 +1,42 @@
+#video-panel {
+}
+
+#controls-panel {
+  margin: 10px;
+}
+
+#data-panel {
+  height: 400px;
+  overflow-y: scroll;
+}
+
+.like-stream-item {
+  opacity: 0;
+  font-size: 32px;
+  float: left;
+  position: absolute;
+  left: 5px;
+  top: 10px;
+  animation: slide 5s 0ms 1 ease-in-out;
+}
+
+.chart {
+  border: 1px solid #ddd;
+  margin-top: 15px;
+}
+
+button {
+  font-size:32px !important;
+}
+
+@keyframes slide {
+  0% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(1024px);
+    position:absolute;
+  }
+}

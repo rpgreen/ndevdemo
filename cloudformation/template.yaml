@@ -1,0 +1,462 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: NDev Demo - Serverless Design Patterns Hands On
+Parameters:
+  ArtifactsS3BucketName:
+    Type: String
+    Description: The S3 bucket in which the Lambda function code is stored. Bucket
+      names are globally unique, so you must change this.
+    Default: "ndev-demo-artifacts"
+
+  SiteS3BucketName:
+    Type: String
+    Description: The S3 bucket in which the web application code is stored. Bucket
+      names are globally unique, so you must change this.
+    Default: "ndev-demo-site"
+
+  CognitoIdentityPoolName:
+    Type: String
+    Description: The name for your Cognito Identity Pool.
+    Default: "ndevuserpool"
+
+  AWSRegion:
+    Type: String
+    Description: The region to deploy to.
+    Default: "us-east-1"
+
+Resources:
+
+  SiteS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref SiteS3BucketName
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+
+  SitePublicReadBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteS3Bucket
+      PolicyDocument:
+        Statement:
+        -
+          Action:
+          - "s3:GetObject"
+          Effect: "Allow"
+          Resource:
+            Fn::Join:
+            - ""
+            -
+              - "arn:aws:s3:::"
+              - !Ref SiteS3BucketName
+              - "/*"
+          Principal: "*"
+
+  ArtifactsS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref ArtifactsS3BucketName
+
+  LikesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: LikeEvents
+      AttributeDefinitions:
+      - AttributeName: Time
+        AttributeType: S
+      KeySchema:
+      - AttributeName: Time
+        KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+
+  TopLikersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: TopLikersTable
+      AttributeDefinitions:
+      - AttributeName: Time
+        AttributeType: S
+      KeySchema:
+      - AttributeName: Time
+        KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+
+  ListlikesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../dist/list.zip
+      Handler: list
+      MemorySize: 1024
+      Role: !GetAtt ListlikesFunctionRole.Arn
+      Runtime: go1.x
+      Timeout: 60
+      Environment:
+        Variables:
+          LikesTableName: !Ref LikesTable
+      Events:
+        ProxyApiRoot:
+          Type: Api
+          Properties:
+            Path: /likes
+            Method: GET
+
+  LikesConsumerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: LikesStream
+    Properties:
+      CodeUri: ../dist/consumer.zip
+      Handler: consumer
+      MemorySize: 1024
+      Role: !GetAtt LikesConsumerFunctionRole.Arn
+      Runtime: go1.x
+      Timeout: 60
+      Environment:
+        Variables:
+          LikesTableName: !Ref LikesTable
+      Events:
+        KinesisMapping:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt LikesStream.Arn
+            StartingPosition: LATEST
+            BatchSize: 10
+
+  BuildTopLikersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../dist/buildTopLikers.zip
+      Handler: buildTopLikers
+      MemorySize: 1024
+      Role: !GetAtt BuildTopLikersFunctionRole.Arn
+      Runtime: go1.x
+      Timeout: 300
+      Environment:
+        Variables:
+          LikesTableName: !Ref LikesTable
+          TopLikersTableName: !Ref TopLikersTable
+      Events:
+        Every5Minutes:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+
+  GetTopLikersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../dist/getTopLikers.zip
+      Handler: getTopLikers
+      MemorySize: 1024
+      Role: !GetAtt GetTopLikersFunctionRole.Arn
+      Runtime: go1.x
+      Timeout: 300
+      Environment:
+        Variables:
+          LikesTableName: !Ref LikesTable
+          TopLikersTableName: !Ref TopLikersTable
+      Events:
+        ProxyApiRoot:
+          Type: Api
+          Properties:
+            Path: /toplikers
+            Method: GET
+
+  LikesStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: LikesStream
+      RetentionPeriodHours: 168
+      ShardCount: 1
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: ndevuserpool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      Schema:
+      - AttributeDataType: String
+        Name: email
+        Required: false
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: CognitoIdentityPool
+      GenerateSecret: false
+      RefreshTokenValidity: 30
+
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Ref CognitoIdentityPoolName
+      AllowUnauthenticatedIdentities: true
+      CognitoIdentityProviders:
+      - ClientId: !Ref CognitoUserPoolClient
+        ProviderName: !Join
+        - ''
+        - - cognito-idp.
+          - !Ref 'AWS::Region'
+          - .amazonaws.com/
+          - !Ref CognitoUserPool
+
+  ListlikesFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: '/'
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - apigateway:*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - kinesis:PutRecord
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            Resource: !Join
+              - ''
+              - - 'arn:aws:dynamodb:'
+                - !Ref 'AWS::Region'
+                - ':'
+                - !Ref 'AWS::AccountId'
+                - :table/
+                - !Ref LikesTable
+
+  LikesConsumerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: '/'
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - kinesis:PutRecord
+            - kinesis:GetShardIterator
+            - kinesis:GetRecords
+            - kinesis:ListStreams
+            - kinesis:DescribeStream
+            Resource: !GetAtt LikesStream.Arn
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - apigateway:*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - kinesis:PutRecord
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            Resource: !Join
+              - ''
+              - - 'arn:aws:dynamodb:'
+                - !Ref 'AWS::Region'
+                - ':'
+                - !Ref 'AWS::AccountId'
+                - :table/
+                - !Ref LikesTable
+
+  BuildTopLikersFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: '/'
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            Resource: !Join
+              - ''
+              - - 'arn:aws:dynamodb:'
+                - !Ref 'AWS::Region'
+                - ':'
+                - !Ref 'AWS::AccountId'
+                - :table/
+                - !Ref LikesTable
+
+          - Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            Resource: !Join
+              - ''
+              - - 'arn:aws:dynamodb:'
+                - !Ref 'AWS::Region'
+                - ':'
+                - !Ref 'AWS::AccountId'
+                - :table/
+                - !Ref TopLikersTable
+
+  GetTopLikersFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: '/'
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            Resource: !Join
+              - ''
+              - - 'arn:aws:dynamodb:'
+                - !Ref 'AWS::Region'
+                - ':'
+                - !Ref 'AWS::AccountId'
+                - :table/
+                - !Ref TopLikersTable
+
+  LambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ListlikesFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join
+        - ''
+        - - 'arn:aws:execute-api:'
+          - !Ref 'AWS::Region'
+          - ':'
+          - !Ref 'AWS::AccountId'
+          - ':'
+          - !Ref ServerlessRestApi
+          - '/*/*'
+
+  CognitoIdentityPoolRoles:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref CognitoIdentityPool
+      Roles:
+        unauthenticated: !GetAtt CognitoUnauthenticatedRole.Arn
+
+  CognitoUnauthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Federated: cognito-identity.amazonaws.com
+          Action: sts:AssumeRoleWithWebIdentity
+          Condition:
+            StringEquals:
+              'cognito-identity.amazonaws.com:aud': !Ref CognitoIdentityPool
+            'ForAnyValue:StringLike':
+              'cognito-identity.amazonaws.com:amr': unauthenticated
+      Policies:
+      - PolicyName: CognitoUnauthenticatedRole
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - execute-api:Invoke
+            Resource: !Sub "arn:aws:execute-api:${AWS::Region}::${AWS::AccountId}:${ServerlessRestApi}/*"
+          - Effect: Allow
+            Action:
+            - kinesis:PutRecord
+            - kinesis:GetShardIterator
+            - kinesis:GetRecords
+            Resource: !GetAtt LikesStream.Arn
+      Path: '/'
+
+Outputs:
+  WebsiteURL:
+    Value: !Join
+      - ''
+      - - http://
+        - !Ref SiteS3BucketName
+        - .s3-website-
+        - !Ref 'AWS::Region'
+        - .amazonaws.com
+    Description: URL for website hosted on S3
