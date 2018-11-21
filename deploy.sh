@@ -25,7 +25,4 @@ sam package --template-file ./cloudformation/template.yaml --output-template-fil
 aws cloudformation deploy --template-file ./cloudformation/packaged.yaml --stack-name ndev1 --region us-east-1 --capabilities CAPABILITY_IAM
 
 # deploy site
-#aws s3 cp site s3://$SITE_BUCKET/ --recursive
-#aws s3 cp react-site/build s3://$SITE_BUCKET/react-site/ --recursive
-
 aws s3 sync react-site/build s3://$SITE_BUCKET

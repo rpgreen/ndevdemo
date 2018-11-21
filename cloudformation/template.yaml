@@ -61,6 +61,13 @@ Resources:
     Properties:
       BucketName: !Ref ArtifactsS3BucketName
 
+  LikesStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: LikesStream
+      RetentionPeriodHours: 168
+      ShardCount: 1
+
   LikesTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -167,13 +174,6 @@ Resources:
           Properties:
             Path: /toplikers
             Method: GET
-
-  LikesStream:
-    Type: AWS::Kinesis::Stream
-    Properties:
-      Name: LikesStream
-      RetentionPeriodHours: 168
-      ShardCount: 1
 
   CognitoUserPool:
     Type: AWS::Cognito::UserPool

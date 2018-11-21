@@ -15,7 +15,7 @@ class DataPanel extends Component {
     render() {
         return (
             <div>
-                <table className="table">
+                <table className="table table-striped">
                     <thead className="thead-dark">
                     <tr>
                         <th scope="col">User</th>
@@ -49,7 +49,6 @@ class DataPanel extends Component {
 
         fetch(path)
             .then(response => {
-                //console.log(response);
                 if (response.ok) {
                     return response.json();
                 } else {
@@ -57,7 +56,6 @@ class DataPanel extends Component {
                 }
             })
             .then(data => {
-                //console.log("Data " + data);
                 if (data === null) {
                     data = [];
                 }

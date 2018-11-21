@@ -81,15 +81,14 @@ function getLikes() {
             var decodedObj = JSON.parse(decoded);
 
             var outerStart= '';
-            var outerEnd =  ''
-
-            // todo: do this in react
+            var outerEnd =  '';
 
             // add some random jitter so multiple spans do not completely overlap
             var min = -20;
             var max = 20;
             var jitter = 5 + Math.floor(Math.random() * (max - min) + min);
 
+            // todo: do this in react
             var html = '<span class="like-stream-item" style="left: ' + jitter + 'px">👍</span>';
             document.getElementById('video-panel').insertAdjacentHTML('beforeend', outerStart + html + outerEnd);
 
