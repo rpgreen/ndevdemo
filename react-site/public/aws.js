@@ -2,12 +2,12 @@
 
 // note: these should be injected at build time from CloudFormation parameters
 AWS.config.region = 'us-east-1';
-var streamName = 'LikesStream'
-var shardId = 'shardId-000000000000'
-var userPoolId = 'us-east-1_ujqGXdUzY'
-var clientId = 'gbknfl2plil90b14rflvmo10'
-var identityPoolId = 'us-east-1:b7df71c5-f146-4b63-9ebf-dbf945e7b7ec'
-var apiPath = "https://63c81wbg6k.execute-api.us-east-1.amazonaws.com/Prod"
+var streamName = 'LikesStream';
+var shardId = 'shardId-000000000000';
+var userPoolId = 'us-east-1_ujqGXdUzY';
+var clientId = 'gbknfl2plil90b14rflvmo10';
+var identityPoolId = 'us-east-1:b7df71c5-f146-4b63-9ebf-dbf945e7b7ec';
+var apiPath = "https://63c81wbg6k.execute-api.us-east-1.amazonaws.com/Prod";
 var kinesis = {};
 var shardIterator = {};
 
@@ -67,18 +67,14 @@ function getLikes() {
 
     var params = {
       ShardIterator: shardIterator, /* required */
-      Limit: 100
+      Limit: 1000
     };
     kinesis.getRecords(params, function(err, data) {
       if (err) console.log(err, err.stack); // an error occurred
       else {
-        //console.log(JSON.stringify(data))
 
         data.Records.forEach(function(record) {
             var bytes = record.Data;
-            var decoded = String.fromCharCode.apply(null, bytes);
-            //console.log(decoded);
-            var decodedObj = JSON.parse(decoded);
 
             var outerStart= '';
             var outerEnd =  '';

@@ -1,6 +1,8 @@
 import {Component} from "react";
 import React from "react";
 
+const refreshPeriod = 2000;
+
 class DataPanel extends Component {
     constructor(props) {
         super(props);
@@ -65,7 +67,7 @@ class DataPanel extends Component {
     }
 
     componentDidMount() {
-        this.interval = setInterval(() => this.updateState(), 2000);
+        this.interval = setInterval(() => this.updateState(), refreshPeriod);
     }
 
     componentWillUnmount() {
