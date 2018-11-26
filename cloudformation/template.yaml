@@ -237,16 +237,9 @@ Resources:
             Resource: '*'
           - Effect: Allow
             Action:
-            - kinesis:PutRecord
-            Resource: '*'
-          - Effect: Allow
-            Action:
             - dynamodb:GetItem
             - dynamodb:Query
             - dynamodb:Scan
-            - dynamodb:PutItem
-            - dynamodb:UpdateItem
-            - dynamodb:DeleteItem
             Resource: !Join
               - ''
               - - 'arn:aws:dynamodb:'
@@ -274,7 +267,6 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-            - kinesis:PutRecord
             - kinesis:GetShardIterator
             - kinesis:GetRecords
             - kinesis:ListStreams
@@ -301,7 +293,6 @@ Resources:
             - dynamodb:Scan
             - dynamodb:PutItem
             - dynamodb:UpdateItem
-            - dynamodb:DeleteItem
             Resource: !Join
               - ''
               - - 'arn:aws:dynamodb:'
